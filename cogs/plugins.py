@@ -339,7 +339,7 @@ class Plugins(commands.Cog):
                 return
         return plugin
 
-    @commands.group(aliases=["plugin"], invoke_without_command=True)
+    @commands.hybrid_group(aliases=["plugin"], invoke_without_command=True)
     @checks.has_permissions(PermissionLevel.OWNER)
     async def plugins(self, ctx):
         """

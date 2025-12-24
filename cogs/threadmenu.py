@@ -70,7 +70,7 @@ class ThreadCreationMenuCore(commands.Cog):
 
     # ----- commands -----
     @checks.has_permissions(PermissionLevel.ADMINISTRATOR)
-    @commands.group(invoke_without_command=True)
+    @commands.hybrid_group(invoke_without_command=True)
     async def threadmenu(self, ctx):
         """Thread-creation menu settings (core)."""
         await ctx.send_help(ctx.command)

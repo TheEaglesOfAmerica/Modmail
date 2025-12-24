@@ -39,14 +39,15 @@ class Modmail(commands.Cog):
         while not self.bot.is_closed():
             now = datetime.now(timezone.utc)
             try:
-                # Query DB every 2 minutes
+                # Query DB every 2 minutes for better performance
                 if (now.timestamp() - last_db_query) > 120:
                     snoozed_threads = await self.bot.api.logs.find(
                         {"snooze_until": {"$gte": now.isoformat()}}
                     ).to_list(None)
                     self._snoozed_cache = snoozed_threads or []
                     last_db_query = now.timestamp()
-                # Check cache every 10 seconds
+                    
+                # Check cache every 10 seconds - use list comprehension for efficiency
                 to_unsnooze = []
                 for thread_data in list(self._snoozed_cache):
                     snooze_until = thread_data.get("snooze_until")
@@ -61,6 +62,8 @@ class Modmail(commands.Cog):
                             continue
                         if now >= dt:
                             to_unsnooze.append(thread_data)
+                            
+                # Batch process unsnooze operations
                 for thread_data in to_unsnooze:
                     recipient = thread_data.get("recipient")
                     if not recipient or not recipient.get("id"):
@@ -112,7 +115,7 @@ class Modmail(commands.Cog):
             return int(match.group(1))
         return None
 
-    @commands.command()
+    @commands.hybrid_command()
     @trigger_typing
     @checks.has_permissions(PermissionLevel.OWNER)
     async def setup(self, ctx):
@@ -535,7 +538,7 @@ class Modmail(commands.Cog):
             embed = create_not_found_embed(name, self.bot.snippets.keys(), "Snippet")
         await ctx.send(embed=embed)
 
-    @commands.command(usage="<category> [options]")
+    @commands.hybrid_command(usage="<category> [options]")
     @checks.has_permissions(PermissionLevel.MODERATOR)
     @checks.thread_only()
     async def move(self, ctx, *, arguments):
@@ -623,7 +626,7 @@ class Modmail(commands.Cog):
         if thread and ctx.channel == thread.channel:
             await thread.channel.send(embed=embed)
 
-    @commands.command(usage="[after] [close message]")
+    @commands.hybrid_command(usage="[after] [close message]")
     @checks.has_permissions(PermissionLevel.SUPPORTER)
     @checks.thread_only()
     async def close(
@@ -841,7 +844,7 @@ class Modmail(commands.Cog):
             )
         return await ctx.send(embed=embed)
 
-    @commands.command()
+    @commands.hybrid_command()
     @checks.has_permissions(PermissionLevel.SUPPORTER)
     @checks.thread_only()
     async def nsfw(self, ctx):
@@ -850,7 +853,7 @@ class Modmail(commands.Cog):
         sent_emoji, _ = await self.bot.retrieve_emoji()
         await self.bot.add_reaction(ctx.message, sent_emoji)
 
-    @commands.command()
+    @commands.hybrid_command()
     @checks.has_permissions(PermissionLevel.SUPPORTER)
     @checks.thread_only()
     async def sfw(self, ctx):
@@ -859,7 +862,7 @@ class Modmail(commands.Cog):
         sent_emoji, _ = await self.bot.retrieve_emoji()
         await self.bot.add_reaction(ctx.message, sent_emoji)
 
-    @commands.command()
+    @commands.hybrid_command()
     @checks.has_permissions(PermissionLevel.SUPPORTER)
     @checks.thread_only()
     async def msglink(self, ctx, message_id: int):
@@ -881,7 +884,7 @@ class Modmail(commands.Cog):
             embed = discord.Embed(color=self.bot.main_color, description=message.jump_url)
         await ctx.send(embed=embed)
 
-    @commands.command()
+    @commands.hybrid_command()
     @checks.has_permissions(PermissionLevel.SUPPORTER)
     @checks.thread_only()
     async def loglink(self, ctx):
@@ -1499,7 +1502,7 @@ class Modmail(commands.Cog):
         session = EmbedPaginatorSession(ctx, *embeds)
         await session.run()
 
-    @commands.command()
+    @commands.hybrid_command()
     @checks.has_permissions(PermissionLevel.SUPPORTER)
     @checks.thread_only()
     async def reply(self, ctx, *, msg: str = ""):
@@ -1515,7 +1518,7 @@ class Modmail(commands.Cog):
         async with safe_typing(ctx):
             await ctx.thread.reply(ctx.message, msg)
 
-    @commands.command(aliases=["formatreply"])
+    @commands.hybrid_command(aliases=["formatreply"])
     @checks.has_permissions(PermissionLevel.SUPPORTER)
     @checks.thread_only()
     async def freply(self, ctx, *, msg: str = ""):
@@ -1541,7 +1544,7 @@ class Modmail(commands.Cog):
         async with safe_typing(ctx):
             await ctx.thread.reply(ctx.message, msg)
 
-    @commands.command(aliases=["formatanonreply"])
+    @commands.hybrid_command(aliases=["formatanonreply"])
     @checks.has_permissions(PermissionLevel.SUPPORTER)
     @checks.thread_only()
     async def fareply(self, ctx, *, msg: str = ""):
@@ -1567,7 +1570,7 @@ class Modmail(commands.Cog):
         async with safe_typing(ctx):
             await ctx.thread.reply(ctx.message, msg, anonymous=True)
 
-    @commands.command(aliases=["formatplainreply"])
+    @commands.hybrid_command(aliases=["formatplainreply"])
     @checks.has_permissions(PermissionLevel.SUPPORTER)
     @checks.thread_only()
     async def fpreply(self, ctx, *, msg: str = ""):
@@ -1593,7 +1596,7 @@ class Modmail(commands.Cog):
         async with safe_typing(ctx):
             await ctx.thread.reply(ctx.message, msg, plain=True)
 
-    @commands.command(aliases=["formatplainanonreply"])
+    @commands.hybrid_command(aliases=["formatplainanonreply"])
     @checks.has_permissions(PermissionLevel.SUPPORTER)
     @checks.thread_only()
     async def fpareply(self, ctx, *, msg: str = ""):
@@ -1619,7 +1622,7 @@ class Modmail(commands.Cog):
         async with safe_typing(ctx):
             await ctx.thread.reply(ctx.message, msg, anonymous=True, plain=True)
 
-    @commands.command(aliases=["anonreply", "anonymousreply"])
+    @commands.hybrid_command(aliases=["anonreply", "anonymousreply"])
     @checks.has_permissions(PermissionLevel.SUPPORTER)
     @checks.thread_only()
     async def areply(self, ctx, *, msg: str = ""):
@@ -1637,7 +1640,7 @@ class Modmail(commands.Cog):
         async with safe_typing(ctx):
             await ctx.thread.reply(ctx.message, msg, anonymous=True)
 
-    @commands.command(aliases=["plainreply"])
+    @commands.hybrid_command(aliases=["plainreply"])
     @checks.has_permissions(PermissionLevel.SUPPORTER)
     @checks.thread_only()
     async def preply(self, ctx, *, msg: str = ""):
@@ -1652,7 +1655,7 @@ class Modmail(commands.Cog):
         async with safe_typing(ctx):
             await ctx.thread.reply(ctx.message, msg, plain=True)
 
-    @commands.command(aliases=["plainanonreply", "plainanonymousreply"])
+    @commands.hybrid_command(aliases=["plainanonreply", "plainanonymousreply"])
     @checks.has_permissions(PermissionLevel.SUPPORTER)
     @checks.thread_only()
     async def pareply(self, ctx, *, msg: str = ""):

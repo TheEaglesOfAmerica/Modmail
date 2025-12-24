@@ -294,7 +294,7 @@ class Utility(commands.Cog):
     def cog_unload(self):
         self.bot.help_command = self._original_help_command
 
-    @commands.command()
+    @commands.hybrid_command()
     @checks.has_permissions(PermissionLevel.REGULAR)
     @utils.trigger_typing
     async def changelog(self, ctx, version: str.lower = ""):
@@ -327,7 +327,40 @@ class Utility(commands.Cog):
                     f"View the changelog here: {changelog.latest_version.changelog_url}#v{version[::2]}"
                 )
 
-    @commands.command(aliases=["info"])
+    @commands.hybrid_command(name="sync")
+    @checks.has_permissions(PermissionLevel.OWNER)
+    async def sync(self, ctx):
+        """Manually sync slash commands to Discord."""
+        await ctx.defer()
+        try:
+            if self.bot.guild_id:
+                guild = discord.Object(id=self.bot.guild_id)
+                self.bot.tree.copy_global_to(guild=guild)
+                synced = await self.bot.tree.sync(guild=guild)
+                await ctx.send(
+                    embed=discord.Embed(
+                        color=self.bot.main_color,
+                        description=f"✅ Synced {len(synced)} commands to guild {self.bot.guild_id}"
+                    )
+                )
+            else:
+                synced = await self.bot.tree.sync()
+                await ctx.send(
+                    embed=discord.Embed(
+                        color=self.bot.main_color,
+                        description=f"✅ Synced {len(synced)} commands globally (may take up to 1 hour)"
+                    )
+                )
+        except Exception as e:
+            await ctx.send(
+                embed=discord.Embed(
+                    color=self.bot.error_color,
+                    description=f"❌ Failed to sync commands: {str(e)}"
+                )
+            )
+            logger.error("Failed to sync commands", exc_info=True)
+
+    @commands.hybrid_command(aliases=["info"])
     @checks.has_permissions(PermissionLevel.REGULAR)
     @utils.trigger_typing
     async def about(self, ctx):
@@ -386,7 +419,7 @@ class Utility(commands.Cog):
         embed.set_footer(text=footer)
         await ctx.send(embed=embed)
 
-    @commands.command(aliases=["sponsor"])
+    @commands.hybrid_command(aliases=["sponsor"])
     @checks.has_permissions(PermissionLevel.REGULAR)
     @utils.trigger_typing
     async def sponsors(self, ctx):
@@ -500,7 +533,7 @@ class Utility(commands.Cog):
             embed=discord.Embed(color=self.bot.main_color, description="Cached logs are now cleared.")
         )
 
-    @commands.command(aliases=["presence"])
+    @commands.hybrid_command(aliases=["presence"])
     @checks.has_permissions(PermissionLevel.ADMINISTRATOR)
     async def activity(self, ctx, activity_type: str.lower, *, message: str = ""):
         """
@@ -563,7 +596,7 @@ class Utility(commands.Cog):
         embed = discord.Embed(title="Activity Changed", description=msg, color=self.bot.main_color)
         return await ctx.send(embed=embed)
 
-    @commands.command()
+    @commands.hybrid_command()
     @checks.has_permissions(PermissionLevel.ADMINISTRATOR)
     async def status(self, ctx, *, status_type: str.lower):
         """
@@ -666,7 +699,7 @@ class Utility(commands.Cog):
         await asyncio.sleep(1800)
         logger.info("Starting presence loop.")
 
-    @commands.command()
+    @commands.hybrid_command()
     @checks.has_permissions(PermissionLevel.ADMINISTRATOR)
     @utils.trigger_typing
     async def ping(self, ctx):
@@ -2114,7 +2147,7 @@ class Utility(commands.Cog):
 
         await EmbedPaginatorSession(ctx, *embeds).run()
 
-    @commands.command()
+    @commands.hybrid_command()
     @checks.has_permissions(PermissionLevel.OWNER)
     @checks.github_token_required()
     @trigger_typing
@@ -2135,7 +2168,7 @@ class Utility(commands.Cog):
         else:
             await ctx.send(embed=discord.Embed(title="Invalid Github Token", color=self.bot.error_color))
 
-    @commands.command()
+    @commands.hybrid_command()
     @checks.has_permissions(PermissionLevel.OWNER)
     @checks.github_token_required(ignore_if_not_heroku=True)
     @checks.updates_enabled()

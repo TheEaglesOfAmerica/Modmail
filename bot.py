@@ -92,9 +92,16 @@ class ModmailBot(commands.Bot):
         self._connected = None
         self.start_time = discord.utils.utcnow()
         self._started = False
+        
+        # Command tree for slash commands
+        self.tree.on_error = self.on_app_command_error
 
         self.threads = ThreadManager(self)
         self._message_queues = {}  # User ID -> asyncio.Queue for message ordering
+        
+        # Cache for frequently accessed data to improve performance
+        self._guild_cache = {}
+        self._member_cache = {}
 
         log_dir = os.path.join(temp_dir, "logs")
         if not os.path.exists(log_dir):
@@ -663,8 +670,23 @@ class ModmailBot(commands.Bot):
 
         This tries getting the user from the cache and falls back to making
         an API call if they're not found in the cache.
+        Implements additional caching to improve performance.
         """
-        return self.get_user(id) or await self.fetch_user(id)
+        user = self.get_user(id)
+        if user:
+            return user
+        
+        # Check our custom cache
+        if id in self._member_cache:
+            cached_time, cached_user = self._member_cache[id]
+            # Cache for 5 minutes
+            if (discord.utils.utcnow().timestamp() - cached_time) < 300:
+                return cached_user
+        
+        # Fetch from API
+        user = await self.fetch_user(id)
+        self._member_cache[id] = (discord.utils.utcnow().timestamp(), user)
+        return user
 
     @staticmethod
     async def get_or_fetch_member(guild: discord.Guild, member_id: int) -> typing.Optional[discord.Member]:
@@ -674,7 +696,13 @@ class ModmailBot(commands.Bot):
         Returns:
             The :obj:`discord.Member` or :obj:`None` to indicate the member could not be found.
         """
-        return guild.get_member(member_id) or await guild.fetch_member(member_id)
+        member = guild.get_member(member_id)
+        if member:
+            return member
+        try:
+            return await guild.fetch_member(member_id)
+        except (discord.NotFound, discord.HTTPException):
+            return None
 
     async def retrieve_emoji(self) -> typing.Tuple[str, str]:
         sent_emoji = self.config["sent_emoji"]
@@ -1470,8 +1498,14 @@ class ModmailBot(commands.Bot):
 
     async def on_message(self, message):
         await self.wait_for_connected()
+        
+        # Early returns for better performance
+        if message.author.bot and not message.type == discord.MessageType.thread_starter_message:
+            return
+            
         if message.type == discord.MessageType.pins_add and message.author == self.user:
             await message.delete()
+            return
 
         if (
             (f"<@{self.user.id}" in message.content or f"<@!{self.user.id}" in message.content)
@@ -2010,6 +2044,64 @@ class ModmailBot(commands.Bot):
             )
         else:
             logger.error("Unexpected exception:", exc_info=exception)
+
+    async def on_app_command_error(
+        self,
+        interaction: discord.Interaction,
+        error: discord.app_commands.AppCommandError
+    ):
+        """Handle errors from slash commands."""
+        if isinstance(error, discord.app_commands.CommandNotFound):
+            await interaction.response.send_message(
+                embed=discord.Embed(
+                    color=self.error_color,
+                    description="This command was not found."
+                ),
+                ephemeral=True
+            )
+        elif isinstance(error, discord.app_commands.MissingPermissions):
+            await interaction.response.send_message(
+                embed=discord.Embed(
+                    color=self.error_color,
+                    description="You don't have permission to use this command."
+                ),
+                ephemeral=True
+            )
+        elif isinstance(error, discord.app_commands.CommandOnCooldown):
+            await interaction.response.send_message(
+                embed=discord.Embed(
+                    title="Command on cooldown",
+                    description=f"Try again in {error.retry_after:.2f} seconds",
+                    color=self.error_color
+                ),
+                ephemeral=True
+            )
+        else:
+            logger.error("Unexpected app command exception:", exc_info=error)
+            try:
+                if not interaction.response.is_done():
+                    await interaction.response.send_message(
+                        embed=discord.Embed(
+                            color=self.error_color,
+                            description="An error occurred while processing this command."
+                        ),
+                        ephemeral=True
+                    )
+            except Exception:
+                pass
+
+    async def setup_hook(self):
+        """Called when the bot is starting up. Sync slash commands here."""
+        # Optionally sync commands to a specific guild for faster testing
+        # Or sync globally (takes up to 1 hour to propagate)
+        if self.guild_id:
+            guild = discord.Object(id=self.guild_id)
+            self.tree.copy_global_to(guild=guild)
+            await self.tree.sync(guild=guild)
+            logger.info("Synced slash commands to guild %s", self.guild_id)
+        else:
+            await self.tree.sync()
+            logger.info("Synced slash commands globally")
 
     @tasks.loop(hours=1)
     async def post_metadata(self):
